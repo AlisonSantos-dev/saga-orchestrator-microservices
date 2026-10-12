@@ -1,7 +1,16 @@
 server:
   port: 8092
 
-  spring:
+spring:
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKER:localhost:9092}
+    topic:
+      orchestrator: orchestrator
+      inventory-success: inventory-success
+      inventory-fail: inventory-fail
+    consumer:
+      group-id: inventory-group
+      auto-offset-reset: latest
 
   datasource:
     driver-class-name: org.postgresql.Driver
@@ -9,9 +18,15 @@ server:
     username: ${DB_USER:postgres}
     password: ${DB_PASSWORD:postgres}
 
-    jpa:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
       hibernate:
-        ddl-auto: create-drop
-      properties:
-        hibernate:
-          dialect: org.hibernate.dialect.PostgreSQLDialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+
+logging:
+  level:
+    org:
+      apache:
+        kafka: OFF

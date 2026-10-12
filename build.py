@@ -1,42 +1,50 @@
 import os
 import threading
 
-threads = []
+GRADLE_COMMAND = "gradlew.bat" if os.name == "nt" else "./gradlew"
+
+APPLICATIONS = [
+    "order-service",
+    "orchestrator-service",
+    "product-validation-service",
+    "payment-service",
+    "inventory-service",
+]
+
+failed_builds = []
 
 
 def build_application(app):
-    threads.append(app)
     print("Building application {}".format(app))
-    os.system("cd {} && gradle build -x test".format(app))
-    print("Application {} finished building!".format(app))
-    threads.remove(app)
+    exit_code = os.system("cd {} && {} build -x test".format(app, GRADLE_COMMAND))
+    if exit_code == 0:
+        print("Application {} finished building!".format(app))
+    else:
+        print("Application {} FAILED to build!".format(app))
+        failed_builds.append(app)
 
 
 def docker_compose_up():
     print("Running containers!")
-    os.popen("docker-compose up --build -d").read()
+    os.system("docker-compose up --build -d")
     print("Pipeline finished!")
 
 
 def build_all_applications():
     print("Starting to build applications!")
-    threading.Thread(target=build_application,
-                     args={"order-service"}).start()
-    threading.Thread(target=build_application,
-                     args={"orchestrator-service"}).start()
-    threading.Thread(target=build_application,
-                     args={"product-validation-service"}).start()
-    threading.Thread(target=build_application,
-                     args={"payment-service"}).start()
-    threading.Thread(target=build_application,
-                     args={"inventory-service"}).start()
+    threads = []
+    for app in APPLICATIONS:
+        thread = threading.Thread(target=build_application, args=(app,))
+        thread.start()
+        threads.append(thread)
+    for thread in threads:
+        thread.join()
 
 
 def remove_remaining_containers():
     print("Removing all containers.")
     os.system("docker-compose down")
-    containers = os.popen('docker ps -aq').read().split('\n')
-    containers.remove('')
+    containers = [c for c in os.popen("docker ps -aq").read().split("\n") if c]
     if len(containers) > 0:
         print("There are still {} containers created".format(containers))
         for container in containers:
@@ -48,7 +56,8 @@ def remove_remaining_containers():
 if __name__ == "__main__":
     print("Pipeline started!")
     build_all_applications()
-    while len(threads) > 0:
-        pass
-    remove_remaining_containers()
-    threading.Thread(target=docker_compose_up).start()
+    if failed_builds:
+        print("Pipeline aborted! Failed builds: {}".format(failed_builds))
+    else:
+        remove_remaining_containers()
+        docker_compose_up()
